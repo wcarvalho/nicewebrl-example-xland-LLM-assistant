@@ -1,24 +1,33 @@
 # XLand-Minigrid Example
 
-## Running the Example
-**From the root directory**
-```bash
-# Install dependencies
-pip install "nicewebrl[xland-assistant] @ git+https://github.com/wcarvalho/nicewebrl.git"
+## Installation
 
-# or 
-pip install -e ".[xland-assistant]"
+```bash
+# Install uv if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install dependencies
+uv sync
 ```
-**From the this directory** `examples/xland-minigrid`:
-```
+
+## Setup
+
+If using API keys, copy `config_template.py` to `config.py` and fill in your API keys.
+
+## Running the Example
+```bash
 # Run the web app
-python web_app_assistant.py
+uv run python web_app_assistant.py
 ```
 
 ## Launching online with fly.io
 
-**From root directory**:
-```
+**Prerequisites**: Install the [fly CLI](https://fly.io/docs/hands-on/install-flyctl/)
+```bash
+
+# Login to fly.io
+flyctl auth login
+
 # setup configuration
 flyctl launch \
 --dockerfile Dockerfile \
