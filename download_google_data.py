@@ -15,9 +15,7 @@ import config
 # User Data
 ##############################
 def initialize_storage_client(bucket_name: str):
-  storage_client = storage.Client.from_service_account_json(
-    config.GOOGLE_CREDENTIALS
-  )
+  storage_client = storage.Client.from_service_account_json(config.GOOGLE_CREDENTIALS)
   bucket = storage_client.bucket(bucket_name)
   return bucket
 

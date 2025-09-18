@@ -12,8 +12,7 @@ import xminigrid
 from xminigrid.wrappers import GymAutoResetWrapper
 from xminigrid.experimental.img_obs import RGBImgObservationWrapper
 from xminigrid.rendering.text_render import _text_encode_rule, _encode_tile
-
-
+from rendering import render
 
 logger = get_logger(__name__)
 
@@ -39,6 +38,7 @@ class PlaygroundTimestepWrapper(TimestepWrapper):
       timestep.observation, shape=(256, 256, 3), method="bilinear"
     ).astype(jnp.uint8)
     return timestep.replace(observation=resized_obs)
+
 
 ########################################
 # Define actions and corresponding keys
@@ -121,7 +121,6 @@ def create_env_with_ruleset(ruleset_key):
     view_size=11,
   )
   env = GymAutoResetWrapper(env)
-  env = RGBImgObservationWrapper(env)
   return env, benchmark, env_params, rule_text
 
 
@@ -138,7 +137,9 @@ jax_web_env.precompile(dummy_env_params=env_params)
 
 
 def render_fn(timestep: nicewebrl.TimeStep):
-  return timestep.observation.astype(jnp.uint8)
+  return render(timestep.state.grid, timestep.state.agent).astype(jnp.uint8)
+
+
 render_fn = jax.jit(render_fn)
 
 vmap_render_fn = jax_web_env.precompile_vmap_render_fn(render_fn, env_params)
@@ -149,6 +150,7 @@ vmap_render_fn = jax_web_env.precompile_vmap_render_fn(render_fn, env_params)
 ########################################
 
 all_stages = []
+
 
 async def instruction_display_fn(stage, container):
   with container.style("align-items: center;"):
@@ -163,11 +165,13 @@ async def instruction_display_fn(stage, container):
       - t to transform an object"""
     )
 
+
 instruction_stage = Stage(name="Instructions", display_fn=instruction_display_fn)
 
 ########################################
 # Define Environment Stages
 ########################################
+
 
 def make_image_html(src):
   html = f"""
@@ -243,6 +247,7 @@ for i in range(num_envs):
 # Define Feedback Stage
 ########################################
 
+
 async def feedback_display_fn(stage, container):
   with container.style("align-items: center;"):
     nicewebrl.clear_element(container)
@@ -271,12 +276,11 @@ async def feedback_display_fn(stage, container):
     for i, q in enumerate(questions):
       with ui.row():
         ui.label(q)
-        ui.radio(
-          [1, 2, 3, 4, 5], on_change=make_handler(q)
-          ).props('inline')
+        ui.radio([1, 2, 3, 4, 5], on_change=make_handler(q)).props("inline")
         answers[q] = None
     await completed_all.wait()
     return answers
+
 
 feedback_stage = FeedbackStage(
   name="Feedback",
@@ -287,10 +291,7 @@ feedback_stage = FeedbackStage(
 ########################################
 # Define Experiment
 ########################################
-all_stages = [
-  instruction_stage,
-  *env_stages,
-  feedback_stage]
+all_stages = [instruction_stage, *env_stages, feedback_stage]
 experiment = nicewebrl.SimpleExperiment(
   stages=all_stages,
   randomize=[False] + [True] * (len(all_stages) - 1),
