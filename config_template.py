@@ -15,7 +15,7 @@ CHATGPT_API_URL = "https://api.openai.com/v1/chat/completions"
 
 # Model Settings
 CLAUDE_MODEL = "claude-3-opus-20240229"
-CHATGPT_MODEL = "gpt-3.5-turbo" 
+CHATGPT_MODEL = "gpt-3.5-turbo"
 
 # Google Cloud Storage
 BUCKET_NAME = "your-bucket-name"

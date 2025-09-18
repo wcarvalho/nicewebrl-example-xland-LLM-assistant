@@ -27,6 +27,7 @@ _user_locks = {}
 # previous_obs_base64 = None
 # current_obs_base64 = None
 
+
 def get_object_name(object_type: int, object_color: int):
   object_types = {
     0: "EMPTY",
@@ -41,9 +42,9 @@ def get_object_name(object_type: int, object_color: int):
     9: "DOOR_CLOSED",
     10: "DOOR_OPEN",
     11: "HEX",
-    12: "STAR"
+    12: "STAR",
   }
-  
+
   colors = {
     0: "EMPTY",
     1: "red",
@@ -56,21 +57,21 @@ def get_object_name(object_type: int, object_color: int):
     8: "orange",
     9: "white",
     10: "brown",
-    11: "pink"
+    11: "pink",
   }
-  
+
   # Handle special case for EMPTY object type
   if object_type == 0:
     return "EMPTY"
-  
+
   # Return the color and object type as a formatted string
   return f"{colors[object_color]} {object_types[object_type]}"
+
 
 def convert_state_to_text(
   timestep: TimeStep,
   rule_text: str,
 ):
-
   gamestate = timestep.state
 
   agent_position = gamestate.agent.position.tolist()
@@ -499,7 +500,7 @@ async def save_data(feedback=None, **kwargs):
     user_storage=user_storage,
     **kwargs,
   )
-  
+
   with open(user_metadata_file, "w") as f:
     json.dump(metadata, f)
 
@@ -619,11 +620,11 @@ async def index(request: Request):
       with display_container.style("align-items: center;"):
         await start_experiment(display_container, stage_container, llm_container)
 
+
 async def footer(footer_container):
   """Add user information and progress bar to the footer"""
   with footer_container:
     with ui.row():
-
       ui.label().bind_text_from(app.storage.user, "user_id", lambda v: f"user id: {v}.")
       ui.label()
 
@@ -638,14 +639,16 @@ async def footer(footer_container):
         app.storage.user, "session_duration", lambda v: f"minutes passed: {int(v)}."
       )
 
-    ui.linear_progress(
-      value=nicewebrl.get_progress()).bind_value_from(app.storage.user, "stage_progress")
+    ui.linear_progress(value=nicewebrl.get_progress()).bind_value_from(
+      app.storage.user, "stage_progress"
+    )
 
     ui.button(
       "Toggle fullscreen",
       icon="fullscreen",
       on_click=nicewebrl.utils.toggle_fullscreen,
     ).props("flat")
+
 
 ui.run(
   storage_secret="private key to secure the browser session cookie",
