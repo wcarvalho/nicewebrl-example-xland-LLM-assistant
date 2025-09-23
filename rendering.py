@@ -131,8 +131,8 @@ def render_floor_jax(img: jnp.ndarray, color: int) -> jnp.ndarray:
   img = jax_fill_coords(
     img, jax_point_in_rect(0, 1, 0, 0.031), jnp.array([100, 100, 100], dtype=jnp.uint8)
   )
-  # Draw tile floor
-  img = jax_fill_coords(img, jax_point_in_rect(0.031, 1, 0.031, 1), color_map // 2)
+  # Draw tile floor (use lighter version of color)
+  img = jax_fill_coords(img, jax_point_in_rect(0.031, 1, 0.031, 1), color_map * 0.7 + 76)  # Lighter color
   return img
 
 
@@ -154,7 +154,8 @@ def render_goal_jax(img: jnp.ndarray, color: int) -> jnp.ndarray:
 def render_ball_jax(img: jnp.ndarray, color: int) -> jnp.ndarray:
   """Render a ball tile."""
   color_map = get_color_for_id(color)
-  img = render_floor_jax(img, Colors.BLACK)
+  # Use white background instead of black floor
+  img = jax_fill_coords(img, jax_point_in_rect(0, 1, 0, 1), jnp.array([240, 240, 240], dtype=jnp.uint8))
   img = jax_fill_coords(img, jax_point_in_circle(0.5, 0.5, 0.31), color_map)
   return img
 
@@ -162,7 +163,8 @@ def render_ball_jax(img: jnp.ndarray, color: int) -> jnp.ndarray:
 def render_key_jax(img: jnp.ndarray, color: int) -> jnp.ndarray:
   """Render a key tile."""
   color_map = get_color_for_id(color)
-  img = render_floor_jax(img, Colors.BLACK)
+  # Use white background instead of black floor
+  img = jax_fill_coords(img, jax_point_in_rect(0, 1, 0, 1), jnp.array([240, 240, 240], dtype=jnp.uint8))
   # Vertical quad
   img = jax_fill_coords(img, jax_point_in_rect(0.50, 0.63, 0.31, 0.88), color_map)
   # Teeth
@@ -181,7 +183,8 @@ def render_key_jax(img: jnp.ndarray, color: int) -> jnp.ndarray:
 def render_pyramid_jax(img: jnp.ndarray, color: int) -> jnp.ndarray:
   """Render a pyramid tile."""
   color_map = get_color_for_id(color)
-  img = render_floor_jax(img, Colors.BLACK)
+  # Use white background instead of black floor
+  img = jax_fill_coords(img, jax_point_in_rect(0, 1, 0, 1), jnp.array([240, 240, 240], dtype=jnp.uint8))
   tri_fn = jax_point_in_triangle((0.15, 0.8), (0.85, 0.8), (0.5, 0.2))
   img = jax_fill_coords(img, tri_fn, color_map)
   return img
@@ -191,8 +194,140 @@ def render_player_jax(img: jnp.ndarray, direction: int) -> jnp.ndarray:
   """Render a player/agent."""
   tri_fn = jax_point_in_triangle((0.12, 0.19), (0.87, 0.50), (0.12, 0.81))
   # Rotate the agent based on its direction
-  tri_fn = jax_rotate_fn(tri_fn, cx=0.5, cy=0.5, theta=0.5 * math.pi * (direction - 1))
+  coeff = -0.5 * (direction - 1)
+  # print("coeff", coeff)
+  tri_fn = jax_rotate_fn(tri_fn, cx=0.5, cy=0.5, theta=coeff * math.pi)
   img = jax_fill_coords(img, tri_fn, COLORS_MAP[Colors.RED])
+  return img
+
+
+def render_square_jax(img: jnp.ndarray, color: int) -> jnp.ndarray:
+  """Render a square tile."""
+  color_map = get_color_for_id(color)
+  # Use white background instead of black floor
+  img = jax_fill_coords(img, jax_point_in_rect(0, 1, 0, 1), jnp.array([240, 240, 240], dtype=jnp.uint8))
+  img = jax_fill_coords(img, jax_point_in_rect(0.25, 0.75, 0.25, 0.75), color_map)
+  return img
+
+
+def jax_point_in_hexagon(radius: float):
+  """JAX-compatible hexagon check function."""
+
+  def fn(y, x):
+    # Convert to hexagon coordinates (center at 0.5, 0.5)
+    dx = x - 0.5
+    dy = y - 0.5
+
+    # Regular hexagon defined by 6 half-planes
+    # The hexagon vertices are at angles: 0°, 60°, 120°, 180°, 240°, 300°
+    # For a regular hexagon, we check if point is inside all 6 half-planes
+
+    # Convert to angle and distance
+    angle = jnp.arctan2(dy, dx)
+    dist = jnp.sqrt(dx**2 + dy**2)
+
+    # For a regular hexagon, the distance from center to edge varies with angle
+    # The formula is: r_edge = radius / cos(angle_mod_60)
+    angle_mod_60 = jnp.abs((angle + jnp.pi/6) % (jnp.pi/3) - jnp.pi/6)
+    max_dist_at_angle = radius / jnp.cos(angle_mod_60)
+
+    return dist <= max_dist_at_angle
+
+  return fn
+
+
+def render_hex_jax(img: jnp.ndarray, color: int) -> jnp.ndarray:
+  """Render a hexagon tile."""
+  color_map = get_color_for_id(color)
+  # Use white background instead of black floor
+  img = jax_fill_coords(img, jax_point_in_rect(0, 1, 0, 1), jnp.array([240, 240, 240], dtype=jnp.uint8))
+  img = jax_fill_coords(img, jax_point_in_hexagon(0.35), color_map)
+  return img
+
+
+def render_star_jax(img: jnp.ndarray, color: int) -> jnp.ndarray:
+  """Render a star (hexagram) tile."""
+  color_map = get_color_for_id(color)
+  # Use white background instead of black floor
+  img = jax_fill_coords(img, jax_point_in_rect(0, 1, 0, 1), jnp.array([240, 240, 240], dtype=jnp.uint8))
+  # Two triangles to form a hexagram
+  tri_fn1 = jax_point_in_triangle((0.15, 0.3), (0.85, 0.3), (0.5, 0.9))
+  tri_fn2 = jax_point_in_triangle((0.15, 0.75), (0.85, 0.75), (0.5, 0.15))
+  img = jax_fill_coords(img, tri_fn1, color_map)
+  img = jax_fill_coords(img, tri_fn2, color_map)
+  return img
+
+
+def render_door_locked_jax(img: jnp.ndarray, color: int) -> jnp.ndarray:
+  """Render a locked door tile."""
+  color_map = get_color_for_id(color)
+  img = jax_fill_coords(img, jax_point_in_rect(0.00, 1.00, 0.00, 1.00), color_map)
+  img = jax_fill_coords(
+    img, jax_point_in_rect(0.06, 0.94, 0.06, 0.94), color_map * 0.45
+  )
+  # Draw key slot
+  img = jax_fill_coords(img, jax_point_in_rect(0.52, 0.75, 0.50, 0.56), color_map)
+  return img
+
+
+def render_door_closed_jax(img: jnp.ndarray, color: int) -> jnp.ndarray:
+  """Render a closed door tile."""
+  color_map = get_color_for_id(color)
+  img = jax_fill_coords(img, jax_point_in_rect(0.00, 1.00, 0.00, 1.00), color_map)
+  img = jax_fill_coords(
+    img,
+    jax_point_in_rect(0.04, 0.96, 0.04, 0.96),
+    jnp.array([0, 0, 0], dtype=jnp.uint8),
+  )
+  img = jax_fill_coords(img, jax_point_in_rect(0.08, 0.92, 0.08, 0.92), color_map)
+  img = jax_fill_coords(
+    img,
+    jax_point_in_rect(0.12, 0.88, 0.12, 0.88),
+    jnp.array([0, 0, 0], dtype=jnp.uint8),
+  )
+  # Draw door handle
+  img = jax_fill_coords(img, jax_point_in_circle(cx=0.75, cy=0.50, r=0.08), color_map)
+  return img
+
+
+def render_door_open_jax(img: jnp.ndarray, color: int) -> jnp.ndarray:
+  """Render an open door tile."""
+  color_map = get_color_for_id(color)
+  # Use white background instead of black floor
+  img = jax_fill_coords(img, jax_point_in_rect(0, 1, 0, 1), jnp.array([240, 240, 240], dtype=jnp.uint8))
+  # Draw grid lines (top and left edges)
+  img = jax_fill_coords(
+    img, jax_point_in_rect(0, 0.031, 0, 1), jnp.array([100, 100, 100], dtype=jnp.uint8)
+  )
+  img = jax_fill_coords(
+    img, jax_point_in_rect(0, 1, 0, 0.031), jnp.array([100, 100, 100], dtype=jnp.uint8)
+  )
+  # Draw door
+  img = jax_fill_coords(img, jax_point_in_rect(0.88, 1.00, 0.00, 1.00), color_map)
+  img = jax_fill_coords(
+    img,
+    jax_point_in_rect(0.92, 0.96, 0.04, 0.96),
+    jnp.array([0, 0, 0], dtype=jnp.uint8),
+  )
+  return img
+
+
+def render_empty_jax(img: jnp.ndarray, color: int) -> jnp.ndarray:
+  """Render an empty tile."""
+  img = jax_fill_coords(
+    img, jax_point_in_rect(0.45, 0.55, 0.2, 0.65), COLORS_MAP[Colors.RED]
+  )
+  img = jax_fill_coords(
+    img, jax_point_in_rect(0.45, 0.55, 0.7, 0.85), COLORS_MAP[Colors.RED]
+  )
+  img = jax_fill_coords(img, jax_point_in_rect(0, 0.031, 0, 1), COLORS_MAP[Colors.RED])
+  img = jax_fill_coords(img, jax_point_in_rect(0, 1, 0, 0.031), COLORS_MAP[Colors.RED])
+  img = jax_fill_coords(
+    img, jax_point_in_rect(1 - 0.031, 1, 0, 1), COLORS_MAP[Colors.RED]
+  )
+  img = jax_fill_coords(
+    img, jax_point_in_rect(0, 1, 1 - 0.031, 1), COLORS_MAP[Colors.RED]
+  )
   return img
 
 
@@ -225,7 +360,19 @@ def get_color_for_id(color_id: int) -> jnp.ndarray:
                   jnp.where(
                     color_id == Colors.BROWN,
                     COLORS_MAP[Colors.BROWN],
-                    COLORS_MAP[Colors.WHITE],  # Default
+                    jnp.where(
+                      color_id == Colors.WHITE,
+                      COLORS_MAP[Colors.WHITE],
+                      jnp.where(
+                        color_id == Colors.PINK,
+                        COLORS_MAP[Colors.PINK],
+                        jnp.where(
+                          color_id == Colors.EMPTY,
+                          COLORS_MAP[Colors.EMPTY],
+                          COLORS_MAP[Colors.WHITE],  # Default
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -253,177 +400,6 @@ COLORS_MAP = {
 }
 
 
-def _render_empty(img: jnp.ndarray, color: int):
-  img = jax_fill_coords(
-    img, point_in_rect(0.45, 0.55, 0.2, 0.65), COLORS_MAP[Colors.RED]
-  )
-  img = jax_fill_coords(
-    img, point_in_rect(0.45, 0.55, 0.7, 0.85), COLORS_MAP[Colors.RED]
-  )
-
-  img = jax_fill_coords(img, point_in_rect(0, 0.031, 0, 1), COLORS_MAP[Colors.RED])
-  img = jax_fill_coords(img, point_in_rect(0, 1, 0, 0.031), COLORS_MAP[Colors.RED])
-  img = jax_fill_coords(img, point_in_rect(1 - 0.031, 1, 0, 1), COLORS_MAP[Colors.RED])
-  img = jax_fill_coords(img, point_in_rect(0, 1, 1 - 0.031, 1), COLORS_MAP[Colors.RED])
-  return img
-
-
-def _render_floor(img: jnp.ndarray, color: int):
-  # draw the grid lines (top and left edges)
-  img = jax_fill_coords(img, point_in_rect(0, 0.031, 0, 1), (100, 100, 100))
-  img = jax_fill_coords(img, point_in_rect(0, 1, 0, 0.031), (100, 100, 100))
-  # draw tile
-  img = jax_fill_coords(img, point_in_rect(0.031, 1, 0.031, 1), COLORS_MAP[color] / 2)
-  return img
-
-  # # other grid lines (was used for paper visualizations)
-  # fill_coords(img, point_in_rect(1 - 0.031, 1, 0, 1), (100, 100, 100))
-  # fill_coords(img, point_in_rect(0, 1, 1 - 0.031, 1), (100, 100, 100))
-  #
-
-
-def _render_wall(img: jnp.ndarray, color: int):
-  img = jax_fill_coords(img, point_in_rect(0, 1, 0, 1), COLORS_MAP[color])
-  return img
-
-
-def _render_ball(img: jnp.ndarray, color: int):
-  img = _render_floor(img, Colors.BLACK)
-  img = jax_fill_coords(img, point_in_circle(0.5, 0.5, 0.31), COLORS_MAP[color])
-  return img
-
-
-def _render_square(img: jnp.ndarray, color: int):
-  img = _render_floor(img, Colors.BLACK)
-  img = jax_fill_coords(img, point_in_rect(0.25, 0.75, 0.25, 0.75), COLORS_MAP[color])
-  return img
-
-
-def _render_pyramid(img: jnp.ndarray, color: int):
-  img = _render_floor(img, Colors.BLACK)
-  tri_fn = point_in_triangle(
-    (0.15, 0.8),
-    (0.85, 0.8),
-    (0.5, 0.2),
-  )
-  img = jax_fill_coords(img, tri_fn, COLORS_MAP[color])
-  return img
-
-
-def _render_hex(img: jnp.ndarray, color: int):
-  img = _render_floor(img, Colors.BLACK)
-  img = jax_fill_coords(img, point_in_hexagon(0.35), COLORS_MAP[color])
-  return img
-
-
-def _render_star(img: jnp.ndarray, color: int):
-  # yes, this is a hexagram not a star, but who cares...
-  img = _render_floor(img, Colors.BLACK)
-  tri_fn2 = point_in_triangle(
-    (0.15, 0.75),
-    (0.85, 0.75),
-    (0.5, 0.15),
-  )
-  tri_fn1 = point_in_triangle(
-    (0.15, 0.3),
-    (0.85, 0.3),
-    (0.5, 0.9),
-  )
-  img = jax_fill_coords(img, tri_fn1, COLORS_MAP[color])
-  img = jax_fill_coords(img, tri_fn2, COLORS_MAP[color])
-  return img
-
-
-def _render_goal(img: jnp.ndarray, color: int):
-  # draw the grid lines (top and left edges)
-  img = jax_fill_coords(img, point_in_rect(0, 0.031, 0, 1), (100, 100, 100))
-  img = jax_fill_coords(img, point_in_rect(0, 1, 0, 0.031), (100, 100, 100))
-  # draw tile
-  img = jax_fill_coords(img, point_in_rect(0.031, 1, 0.031, 1), COLORS_MAP[color])
-  return img
-
-  # # other grid lines (was used for paper visualizations)
-  # fill_coords(img, point_in_rect(1 - 0.031, 1, 0, 1), (100, 100, 100))
-  # fill_coords(img, point_in_rect(0, 1, 1 - 0.031, 1), (100, 100, 100))
-
-
-def _render_key(img: jnp.ndarray, color: int):
-  img = _render_floor(img, Colors.BLACK)
-  # Vertical quad
-  img = jax_fill_coords(img, point_in_rect(0.50, 0.63, 0.31, 0.88), COLORS_MAP[color])
-  # Teeth
-  img = jax_fill_coords(img, point_in_rect(0.38, 0.50, 0.59, 0.66), COLORS_MAP[color])
-  img = jax_fill_coords(img, point_in_rect(0.38, 0.50, 0.81, 0.88), COLORS_MAP[color])
-  # Ring
-  img = jax_fill_coords(
-    img, point_in_circle(cx=0.56, cy=0.28, r=0.190), COLORS_MAP[color]
-  )
-  img = jax_fill_coords(img, point_in_circle(cx=0.56, cy=0.28, r=0.064), (0, 0, 0))
-  return img
-
-
-def _render_door_locked(img: jnp.ndarray, color: int):
-  img = jax_fill_coords(img, point_in_rect(0.00, 1.00, 0.00, 1.00), COLORS_MAP[color])
-  img = jax_fill_coords(
-    img, point_in_rect(0.06, 0.94, 0.06, 0.94), 0.45 * COLORS_MAP[color]
-  )
-  # Draw key slot
-  img = jax_fill_coords(img, point_in_rect(0.52, 0.75, 0.50, 0.56), COLORS_MAP[color])
-  return img
-
-
-def _render_door_closed(img: jnp.ndarray, color: int):
-  img = jax_fill_coords(img, point_in_rect(0.00, 1.00, 0.00, 1.00), COLORS_MAP[color])
-  img = jax_fill_coords(img, point_in_rect(0.04, 0.96, 0.04, 0.96), (0, 0, 0))
-  img = jax_fill_coords(img, point_in_rect(0.08, 0.92, 0.08, 0.92), COLORS_MAP[color])
-  img = jax_fill_coords(img, point_in_rect(0.12, 0.88, 0.12, 0.88), (0, 0, 0))
-  # Draw door handle
-  img = jax_fill_coords(
-    img, point_in_circle(cx=0.75, cy=0.50, r=0.08), COLORS_MAP[color]
-  )
-  return img
-
-
-def _render_door_open(img: jnp.ndarray, color: int):
-  img = _render_floor(img, Colors.BLACK)
-  # draw the grid lines (top and left edges)
-  img = jax_fill_coords(img, point_in_rect(0, 0.031, 0, 1), (100, 100, 100))
-  img = jax_fill_coords(img, point_in_rect(0, 1, 0, 0.031), (100, 100, 100))
-  # draw door
-  img = jax_fill_coords(img, point_in_rect(0.88, 1.00, 0.00, 1.00), COLORS_MAP[color])
-  img = jax_fill_coords(img, point_in_rect(0.92, 0.96, 0.04, 0.96), (0, 0, 0))
-  return img
-
-
-def _render_player(img: jnp.ndarray, direction: int):
-  tri_fn = point_in_triangle(
-    (0.12, 0.19),
-    (0.87, 0.50),
-    (0.12, 0.81),
-  )
-  # Rotate the agent based on its direction
-  tri_fn = rotate_fn(tri_fn, cx=0.5, cy=0.5, theta=0.5 * math.pi * (direction - 1))
-  img = jax_fill_coords(img, tri_fn, COLORS_MAP[Colors.RED])
-  return img
-
-
-TILES_FN_MAP = {
-  Tiles.FLOOR: _render_floor,
-  Tiles.WALL: _render_wall,
-  Tiles.BALL: _render_ball,
-  Tiles.SQUARE: _render_square,
-  Tiles.PYRAMID: _render_pyramid,
-  Tiles.HEX: _render_hex,
-  Tiles.STAR: _render_star,
-  Tiles.GOAL: _render_goal,
-  Tiles.KEY: _render_key,
-  Tiles.DOOR_LOCKED: _render_door_locked,
-  Tiles.DOOR_CLOSED: _render_door_closed,
-  Tiles.DOOR_OPEN: _render_door_open,
-  Tiles.EMPTY: _render_empty,
-}
-
-
 # TODO: add highlight for can_see_through_walls=Fasle
 def get_highlight_mask(
   grid: jnp.ndarray, agent: AgentState | None, view_size: int
@@ -432,51 +408,6 @@ def get_highlight_mask(
     (grid.shape[0] + 2 * view_size, grid.shape[1] + 2 * view_size), dtype=jnp.bool_
   )
   return mask
-  # if agent is None:
-  #    return mask
-
-  # agent_y, agent_x = agent.position + view_size
-  # if agent.direction == 0:
-  #    y, x = agent_y - view_size + 1, agent_x - (view_size // 2)
-  # elif agent.direction == 1:
-  #    y, x = agent_y - (view_size // 2), agent_x
-  # elif agent.direction == 2:
-  #    y, x = agent_y, agent_x - (view_size // 2)
-  # elif agent.direction == 3:
-  #    y, x = agent_y - (view_size // 2), agent_x - view_size + 1
-  # else:
-  #    raise RuntimeError("Unknown direction")
-
-  # mask[y: y + view_size, x: x + view_size] = True
-  # mask = mask[view_size:-view_size, view_size:-view_size]
-  # assert mask.shape == (grid.shape[0], grid.shape[1])
-
-  # return mask
-
-
-def render_tile(
-  tile: tuple,
-  agent_direction: int | None = None,
-  highlight: bool = False,
-  tile_size: int = 32,
-  subdivs: int = 3,
-) -> jnp.ndarray:
-  img = jnp.full(
-    (tile_size * subdivs, tile_size * subdivs, 3), dtype=jnp.uint8, fill_value=255
-  )
-  # draw tile
-  img = TILES_FN_MAP[tile[0]](img, tile[1])
-  # draw agent if on this tile
-  if agent_direction is not None:
-    img = _render_player(img, agent_direction)
-
-  if highlight:
-    img = jax_highlight_img(img, alpha=0.2)
-
-  # downsample the image to perform supersampling/anti-aliasing
-  img = jax_downsample(img, subdivs)
-
-  return img
 
 
 def render(
@@ -501,13 +432,12 @@ def render(
     tile_data = grid[y, x]
 
     # Check if agent is on this tile
-    agent_here = jnp.where(
-      agent is not None, jnp.array_equal(jnp.array([y, x]), agent.position), False
-    )
-
-    agent_direction = jnp.where(
-      agent_here, agent.direction if agent is not None else -1, -1
-    )
+    if agent is not None:
+      agent_here = jnp.array_equal(jnp.array([y, x]), agent.position)
+      agent_direction = jnp.where(agent_here, agent.direction, -1)
+    else:
+      agent_here = False
+      agent_direction = -1
 
     # Create tile with supersampling (subdivs=3 like original)
     subdivs = 3
@@ -535,7 +465,35 @@ def render(
               jnp.where(
                 tile_data[0] == Tiles.PYRAMID,
                 render_pyramid_jax(tile_img, tile_data[1]),
-                tile_img,  # Default case
+                jnp.where(
+                  tile_data[0] == Tiles.SQUARE,
+                  render_square_jax(tile_img, tile_data[1]),
+                  jnp.where(
+                    tile_data[0] == Tiles.HEX,
+                    render_hex_jax(tile_img, tile_data[1]),
+                    jnp.where(
+                      tile_data[0] == Tiles.STAR,
+                      render_star_jax(tile_img, tile_data[1]),
+                      jnp.where(
+                        tile_data[0] == Tiles.DOOR_LOCKED,
+                        render_door_locked_jax(tile_img, tile_data[1]),
+                        jnp.where(
+                          tile_data[0] == Tiles.DOOR_CLOSED,
+                          render_door_closed_jax(tile_img, tile_data[1]),
+                          jnp.where(
+                            tile_data[0] == Tiles.DOOR_OPEN,
+                            render_door_open_jax(tile_img, tile_data[1]),
+                            jnp.where(
+                              tile_data[0] == Tiles.EMPTY,
+                              render_empty_jax(tile_img, tile_data[1]),
+                              tile_img,  # Default case
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -571,3 +529,70 @@ def render(
   )
 
   return img
+
+
+if __name__ == "__main__":
+  import matplotlib.pyplot as plt
+  from xminigrid.core.constants import Colors, Tiles
+
+  # Define all tile types and their names
+  tile_types = [
+    (Tiles.EMPTY, "EMPTY"),
+    (Tiles.FLOOR, "FLOOR"),
+    (Tiles.WALL, "WALL"),
+    (Tiles.BALL, "BALL"),
+    (Tiles.SQUARE, "SQUARE"),
+    (Tiles.PYRAMID, "PYRAMID"),
+    (Tiles.GOAL, "GOAL"),
+    (Tiles.KEY, "KEY"),
+    (Tiles.DOOR_LOCKED, "DOOR_LOCKED"),
+    (Tiles.DOOR_CLOSED, "DOOR_CLOSED"),
+    (Tiles.DOOR_OPEN, "DOOR_OPEN"),
+    (Tiles.HEX, "HEX"),
+    (Tiles.STAR, "STAR"),
+  ]
+
+  # Colors to cycle through
+  colors = [Colors.RED, Colors.GREEN, Colors.BLUE, Colors.YELLOW, Colors.PURPLE]
+
+  # Calculate grid dimensions
+  n_tiles = len(tile_types)
+  cols = 3
+  rows = (n_tiles + cols - 1) // cols  # Ceiling division
+
+  width = 3
+  fig, axes = plt.subplots(rows, cols, figsize=(width, width*rows))
+  axes = axes.flatten() if rows > 1 else [axes] if cols == 1 else axes
+
+  plot_idx = 0
+  render = jax.jit(render)
+  for i, (tile_type, tile_name) in enumerate(tile_types):
+    if plot_idx >= len(axes):
+      break
+
+    # Cycle through colors for each tile type
+    color = colors[i % len(colors)]
+    color_name = ['RED', 'GREEN', 'BLUE', 'YELLOW', 'PURPLE'][colors.index(color)]
+
+    # Create a single tile grid
+    grid = jnp.array([[[tile_type, color]]], dtype=jnp.int32)
+    # Render the tile
+    img = render(grid)
+
+    # Plot
+    ax = axes[plot_idx]
+    ax.imshow(img)
+    ax.set_title(f"{tile_name}\n{color_name}")
+    ax.axis('off')
+
+    plot_idx += 1
+
+  # Hide unused subplots
+  for i in range(plot_idx, len(axes)):
+    axes[i].axis('off')
+
+  plt.tight_layout()
+  plt.savefig('tile_rendering_test.png', dpi=150, bbox_inches='tight')
+  plt.show()
+
+  print(f"Generated visualization with {plot_idx} tile/color combinations")

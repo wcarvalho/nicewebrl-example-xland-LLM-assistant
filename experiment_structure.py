@@ -45,8 +45,8 @@ class PlaygroundTimestepWrapper(TimestepWrapper):
 ########################################
 class Actions(IntEnum):
   forward = 0
-  right = 1
-  left = 2
+  clockwise = 1
+  counter_clockwise = 2
   pick_up = 3
   put_down = 4
   toggle = 5
@@ -55,7 +55,7 @@ class Actions(IntEnum):
 # Only first 3 actions are actually used
 actions = jnp.array([0, 1, 2, 3, 4, 5])
 action_keys = ["ArrowUp", "ArrowRight", "ArrowLeft", "p", "d", "t"]  # Mapping to keys
-action_to_name = ["Forward", "Right", "Left", "Pick Up", "Drop", "Toggle"]
+action_to_name = [Actions(int(i)).name for i in actions]
 
 
 ########################################
@@ -109,25 +109,26 @@ def describe_ruleset(ruleset) -> str:
   return str
 
 
-def create_env_with_ruleset(ruleset_key):
+def create_env(ruleset_key):
   env, env_params = xminigrid.make("XLand-MiniGrid-R1-9x9")
-  benchmark = xminigrid.load_benchmark(name="trivial-1m")
-  rule = benchmark.sample_ruleset(jax.random.key(ruleset_key))
-  rule_text = describe_ruleset(rule)
+  benchmark = xminigrid.load_benchmark(name="small-1m")
+  rule = benchmark.sample_ruleset(ruleset_key)
+  # rule_text = describe_ruleset(rule)
 
   env_params = env_params.replace(
     ruleset=rule,
-    max_steps=50,
+    max_steps=200,
     view_size=11,
   )
-  env = GymAutoResetWrapper(env)
-  return env, benchmark, env_params, rule_text
+  #env = GymAutoResetWrapper(env)
+  return env, benchmark, env_params
 
 
 num_envs = 3
 
 # Create 5 different environments
-env, benchmark, env_params, rule_text = create_env_with_ruleset(0)
+ruleset_key = jax.random.key(42)
+env, benchmark, env_params = create_env(ruleset_key)
 jax_env = PlaygroundTimestepWrapper(env, autoreset=True, use_params=True)
 jax_web_env = JaxWebEnv(
   env=jax_env,
@@ -187,11 +188,7 @@ async def env_stage_display_fn(
 ):
   rendered_img = stage.render_fn(timestep)
   new_obs_base64 = base64_npimage(rendered_img)
-
   stage_state = stage.get_user_data("stage_state")
-  rule = benchmark.sample_ruleset(nicewebrl.new_rng())
-  current_rule_text = describe_ruleset(rule)
-  await stage.set_user_data(rule_text=current_rule_text)
 
   with container.style("align-items: center;"):
     nicewebrl.clear_element(container)
@@ -205,11 +202,21 @@ async def env_stage_display_fn(
           stage_state, "nepisodes", lambda n: f"Try: {n}/{stage.max_episodes}"
         )
     ui.markdown("""
-    You have  50 steps to figure out and complete the task. You can ask the AI for help.
+    You have 200 steps to figure out and complete the task. You can ask the AI for help.
     
-    Red exclamations indicate out of bounds.
+    You control the red triangle. The direction the point is facing is "forward".
     """)
+    # the direction the agent will move when you press the up arrow key. Right rotates the agent clockwise, left rotates the agent counter-clockwise.
     ui.html(make_image_html(src=new_obs_base64))
+    ui.markdown("""
+    actions: <br>
+      - ArrowUp: move forward <br>
+      - ArrowRight: rotate clockwise <br>
+      - ArrowLeft: rotate counter-clockwise <br>
+      - p: pick up an object <br>
+      - d: drop an object <br>
+      - t: transform an object
+    """)
 
 
 def evaluate_success_fn(timestep: TimeStep, params: Optional[object] = None):
@@ -219,8 +226,10 @@ def evaluate_success_fn(timestep: TimeStep, params: Optional[object] = None):
 # Create 5 different stages
 env_stages = []
 for i in range(num_envs):
-  # Get the rule_text for the current environment
-  # envs_and_params_and_ruletext is a list of (env, env_params, rule_text)
+  # Each env has different ruleset
+  ruleset_key, rng = jax.random.split(ruleset_key)
+  rule = benchmark.sample_ruleset(rng)
+  env_params = env_params.replace(ruleset=rule)
 
   environment_stage = EnvStage(
     name=f"Environment {i + 1}",

@@ -5,7 +5,7 @@ from nicegui import app, ui
 from fastapi import Request
 from tortoise import Tortoise
 import jax
-import httpx
+import dspy
 import config
 import nicewebrl
 from nicewebrl.logging import setup_logging, get_logger
@@ -24,8 +24,54 @@ DATABASE_FILE = "db.sqlite"
 
 _user_locks = {}
 
-# previous_obs_base64 = None
-# current_obs_base64 = None
+# DSPy configuration
+class GameAssistant(dspy.Signature):
+    """You are a helpful assistant for a Gridworld reinforcement learning game.
+
+    These are the keys to control the agent:
+    ArrowUp: Move Forward
+    ArrowRight: Turn Right
+    ArrowLeft: Turn Left
+    p: Pick Up
+    d: Drop
+    t: Toggle
+
+    The agent can pick up, drop, and toggle the doors.
+    Use the environment information to understand the user's position and goal.
+    Give short, specific hints to help them progress.
+    Keep responses to 1-2 lines."""
+
+    env_text = dspy.InputField(desc="Current environment state")
+    question = dspy.InputField(desc="User's question")
+    answer = dspy.OutputField(desc="Short, specific hint to help the user progress")
+
+# Initialize DSPy models
+_dspy_models = {}
+
+def initialize_dspy_models():
+    """Initialize DSPy models for all three providers"""
+    global _dspy_models
+
+    # Use config settings
+    _dspy_models["gemini"] = dspy.LM(
+        model=config.GEMINI_MODEL,
+        api_key=config.GEMINI_API_KEY,
+        max_tokens=16000
+    )
+
+    _dspy_models["claude"] = dspy.LM(
+        model=f"anthropic/{config.CLAUDE_MODEL}",
+        api_key=config.CLAUDE_API_KEY,
+        max_tokens=16000
+    )
+
+    _dspy_models["chatgpt"] = dspy.LM(
+        model=f"openai/{config.CHATGPT_MODEL}",
+        api_key=config.CHATGPT_API_KEY,
+        temperature=1.0,
+        max_tokens=16000
+    )
+
 
 
 def get_object_name(object_type: int, object_color: int):
@@ -113,142 +159,78 @@ def convert_state_to_text(
   return state_text
 
 
-async def get_gemini_response(message, env_text):
-  url = f"{config.GEMINI_API_URL}?key={config.GEMINI_API_KEY}"
-  headers = {"Content-Type": "application/json"}
+async def get_llm_response(message, env_text, model_name):
+    """Get response using DSPy for the specified model"""
+    logger.info(f"Getting LLM response from {model_name} for message: {message[:50]}...")
 
-  parts = [
-    {
-      "text": (
-        "You are a helpful assistant for a Minigrid 8x8 Empty reinforcement learning game.\n"
-        "These are the keys to control the agent:\n"
-        "ArrowUp: Move Forward\n"
-        "ArrowRight: Turn Right\n"
-        "ArrowLeft: Turn Left\n"
-        "p: Pick Up\n"
-        "d: Drop\n"
-        "t: Toggle\n"
-        "The agent can pick up, drop, and toggle the doors.\n"
-        "Current environment state:\n"
-        f"{env_text}\n"
-        "Use this information to understand the user's position and goal.\n"
-        "Give short, specific hints to help them progress.\n"
-        "Keep responses to 1-2 lines."
-      )
-    }
-  ]
-  parts.append({"text": f"Question: {message}"})
-  data = {"contents": [{"parts": parts}]}
+    if model_name not in _dspy_models:
+        raise ValueError(f"Model {model_name} not initialized")
 
-  async with httpx.AsyncClient() as client:
-    res = await client.post(url, headers=headers, json=data)
-    res.raise_for_status()
-    return res.json()["candidates"][0]["content"]["parts"][0]["text"]
+    # Run the LLM call in a thread pool to avoid blocking
+    import concurrent.futures
+    import asyncio
 
+    def sync_llm_call():
+        try:
+            logger.info(f"Starting sync LLM call for {model_name}")
+            with dspy.context(lm=_dspy_models[model_name]):
+                assistant = dspy.ChainOfThought(GameAssistant)
+                result = assistant(env_text=env_text, question=message)
+                logger.info(f"LLM response received: {result.answer[:100]}...")
+                return result.answer
+        except Exception as e:
+            logger.error(f"Error in sync_llm_call: {e}")
+            raise
 
-async def get_claude_response(message, env_text):
-  url = config.CLAUDE_API_URL
-  headers = {
-    "Content-Type": "application/json",
-    "x-api-key": config.CLAUDE_API_KEY,
-    "anthropic-version": "2023-06-01",
-  }
-
-  system_prompt = (
-    "You are a helpful assistant for a Gridworld reinforcement learning game.\n"
-    "These are the keys to control the agent:\n"
-    "ArrowUp: Move Forward\n"
-    "ArrowRight: Turn Right\n"
-    "ArrowLeft: Turn Left\n"
-    "p: Pick Up\n"
-    "d: Drop\n"
-    "t: Toggle\n"
-    "The agent can pick up, drop, and toggle the doors.\n"
-    "Use this information to understand the user's position and goal.\n"
-    "Give short, specific hints to help them progress.\n"
-    "Keep responses to 1-2 lines.\n\n"
-  )
-  user_prompt = f"Current environment state:\n{env_text}\nQuestion: {message}"
-
-  data = {
-    "model": config.CLAUDE_MODEL,
-    "max_tokens": 150,
-    "system": system_prompt,
-    "messages": [{"role": "user", "content": user_prompt}],
-  }
-
-  async with httpx.AsyncClient() as client:
-    res = await client.post(url, headers=headers, json=data)
-    res.raise_for_status()
-    return res.json()["content"][0]["text"]
-
-
-async def get_chatgpt_response(message, env_text):
-  url = config.CHATGPT_API_URL
-  headers = {
-    "Content-Type": "application/json",
-    "Authorization": f"Bearer {config.CHATGPT_API_KEY}",
-  }
-
-  prompt = (
-    "You are a helpful assistant for a Minigrid 8x8 Empty reinforcement learning game.\n"
-    "These are the keys to control the agent:\n"
-    "ArrowUp: Move Forward\n"
-    "ArrowRight: Turn Right\n"
-    "ArrowLeft: Turn Left\n"
-    "p: Pick Up\n"
-    "d: Drop\n"
-    "t: Toggle\n"
-    "The agent can pick up, drop, and toggle the doors.\n"
-    "Current environment state:\n"
-    f"{env_text}\n"
-    "Use this information to understand the user's position and goal.\n"
-    "Give short, specific hints to help them progress.\n"
-    "Keep responses to 1-2 lines."
-  )
-
-  data = {
-    "model": config.CHATGPT_MODEL,
-    "messages": [
-      {"role": "system", "content": prompt},
-      {"role": "user", "content": message},
-    ],
-    "max_tokens": 150,
-  }
-
-  async with httpx.AsyncClient() as client:
-    res = await client.post(url, headers=headers, json=data)
-    res.raise_for_status()
-    return res.json()["choices"][0]["message"]["content"]
+    # Execute the synchronous LLM call in a thread pool
+    try:
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            response = await loop.run_in_executor(executor, sync_llm_call)
+        logger.info(f"Async LLM call completed successfully")
+        return response
+    except Exception as e:
+        logger.error(f"Error in async LLM call: {e}")
+        raise
 
 
 async def send_message(chat_input, response_box):
   message = chat_input.value
+  chat_input.set_value("")
+
+  logger.info(f"Send message called with: {message}")
+
+  # Show immediate feedback
+  response_box.set_content("**Thinking...** 🤔")
+  response_box.update()
+
   try:
     current_stage = await experiment.get_stage()
     env_text = ""
     if isinstance(current_stage, stages.EnvStage):
       timestep = current_stage.get_user_data("stage_state").timestep
       if timestep is not None and timestep.state is not None:
-        rule_text = current_stage.get_user_data("rule_text")
+        ruleset = current_stage.env_params.ruleset
+        rule_text = describe_ruleset(ruleset)
         env_text = convert_state_to_text(timestep, rule_text)
 
     # Use the persisted model selection
     model = app.storage.user["selected_model"]
+    logger.info(f"Using model: {model}")
 
-    if model == "gemini":
-      response = await get_gemini_response(message, env_text)
-    elif model == "claude":
-      response = await get_claude_response(message, env_text)
-    else:  # chatgpt
-      response = await get_chatgpt_response(message, env_text)
+    # Get response using DSPy (now truly async)
+    logger.info("Calling get_llm_response...")
+    print(env_text)
+    response = await get_llm_response(message, env_text, model)
+    logger.info(f"Received response: {response}")
 
     response_box.set_content(f"**Hint:** {response}")
     response_box.update()
+    logger.info("Response box updated successfully")
   except Exception as e:
+    logger.error(f"Error in send_message: {e}")
     response_box.set_content(f"**Error:** {str(e)}")
     response_box.update()
-  chat_input.set_value("")
 
 
 def get_user_lock():
@@ -287,6 +269,9 @@ async def init_db() -> None:
     modules={"models": ["nicewebrl.stages"]},
   )
   await Tortoise.generate_schemas()
+
+  # Initialize DSPy models
+  initialize_dspy_models()
 
 
 async def close_db() -> None:

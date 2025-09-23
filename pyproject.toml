@@ -8,6 +8,7 @@ dependencies = [
     "nicewebrl[xland-assistant] @ git+https://github.com/KempnerInstitute/nicewebrl.git",
     'marimo',
     "matplotlib>=3.10.6",
+    "dspy>=3.0.3",
 ]
 
 [project.optional-dependencies]
