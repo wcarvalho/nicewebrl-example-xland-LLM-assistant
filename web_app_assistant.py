@@ -1,10 +1,14 @@
 import os.path
 import asyncio
 from asyncio import Lock
+
 from nicegui import app, ui
 from fastapi import Request
 from tortoise import Tortoise
 import jax
+import jax.numpy as jnp
+import numpy as np
+import distrax
 import dspy
 import config
 import nicewebrl
@@ -23,6 +27,9 @@ DATA_DIR = "data"
 DATABASE_FILE = "db.sqlite"
 
 _user_locks = {}
+
+model_list = ["gemini", "chatgpt"]
+model_counts = np.zeros(len(model_list), dtype=int)
 
 
 # DSPy configuration
@@ -595,12 +602,16 @@ async def index(request: Request):
     start = ui.button("Start Experiment")
     start.on_click(on_selection_change)
 
+
 async def run_experiment():
-  model_list = ["gemini", "claude", "chatgpt"]
   # Initialize random model selection if not already set
   if "selected_model" not in app.storage.user:
     rng = nicewebrl.new_rng()
-    idx = jax.random.randint(rng, (), 0, len(model_list))
+    mask = model_counts == model_counts.min()
+    # Uniform over minima via logits=0 for minima, -inf otherwise.
+    logits = jnp.where(mask, 0.0, -jnp.inf)
+    idx = distrax.Categorical(logits=logits).sample(seed=rng)
+    model_counts[int(idx)] += 1
     app.storage.user["selected_model"] = model_list[int(idx)]
 
   basic_javascript_file = nicewebrl.basic_javascript_file()
