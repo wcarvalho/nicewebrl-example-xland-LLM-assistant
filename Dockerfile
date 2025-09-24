@@ -13,6 +13,10 @@ COPY ./config.py /app/
 
 COPY ./google-cloud-key.json /app/
 
+# Copy cached benchmark data to expected location
+RUN mkdir -p /root/.xland_minigrid
+COPY ./cache/ /root/.xland_minigrid/
+
 # Then copy everything else
 COPY . /app
 

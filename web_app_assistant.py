@@ -547,8 +547,18 @@ async def run_stage(stage, container):
         logger.info(f"Finished {stage.name} via button press")
         stage_over_event.set()
 
+  async def call_timer():
+    ui.notify("Time limit reached", type= "negative")
+    logger.info(f"Finished {stage.name} via timer")
+    stage_over_event.set()
+
   with container.style("align-items: center;"):
     await stage.activate(container)
+
+  minutes = 4
+  seconds = int(os.getenv("SECONDS", minutes*60))
+  logger.info(f"will finish in {seconds} seconds")
+  ui.timer(seconds, call_timer, once=True)
 
   if stage.get_user_data("finished", False):
     logger.info(f"Finished {stage.name} immediately after activation")
@@ -561,7 +571,6 @@ async def run_stage(stage, container):
       await handle_button_press()
 
   await stage_over_event.wait()
-
 
 async def check_if_over(container, episode_limit=60):
   minutes_passed = nicewebrl.get_user_session_minutes()

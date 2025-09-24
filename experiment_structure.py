@@ -173,8 +173,8 @@ async def env_stage_display_fn(
         ui.label().bind_text_from(
           stage_state, "nepisodes", lambda n: f"Try: {n}/{stage.max_episodes}"
         )
-    ui.markdown("""
-    You have 200 steps to figure out and complete the task. You can ask the AI for help.
+    ui.markdown(f"""
+    You have {MAX_EPISODE_TIMESTEPS} steps to figure out and complete the task. You can ask the AI for help.
     
     You control the red triangle. The direction the point is facing is "forward".
     """)
