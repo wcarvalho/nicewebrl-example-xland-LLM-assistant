@@ -9,6 +9,9 @@ dependencies = [
     'marimo',
     "matplotlib>=3.10.6",
     "dspy>=3.0.3",
+    "certifi>=2025.8.3",
+    "ipdb>=0.13.13",
+    "nicegui>=2.24.2",
 ]
 
 [project.optional-dependencies]

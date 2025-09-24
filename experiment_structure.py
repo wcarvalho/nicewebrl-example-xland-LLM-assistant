@@ -113,37 +113,18 @@ def create_env(ruleset_key):
   env, env_params = xminigrid.make("XLand-MiniGrid-R1-9x9")
   benchmark = xminigrid.load_benchmark(name="small-1m")
   rule = benchmark.sample_ruleset(ruleset_key)
-  # rule_text = describe_ruleset(rule)
 
   env_params = env_params.replace(
     ruleset=rule,
     max_steps=200,
     view_size=11,
   )
-  #env = GymAutoResetWrapper(env)
   return env, benchmark, env_params
 
 
 num_envs = 3
-
-# Create 5 different environments
-ruleset_key = jax.random.key(42)
-env, benchmark, env_params = create_env(ruleset_key)
-jax_env = PlaygroundTimestepWrapper(env, autoreset=True, use_params=True)
-jax_web_env = JaxWebEnv(
-  env=jax_env,
-  actions=actions,
-)
-jax_web_env.precompile(dummy_env_params=env_params)
-
-
 def render_fn(timestep: nicewebrl.TimeStep):
   return render(timestep.state.grid, timestep.state.agent).astype(jnp.uint8)
-
-
-render_fn = jax.jit(render_fn)
-
-vmap_render_fn = jax_web_env.precompile_vmap_render_fn(render_fn, env_params)
 
 
 ########################################
@@ -223,34 +204,57 @@ def evaluate_success_fn(timestep: TimeStep, params: Optional[object] = None):
   return timestep.last() and timestep.reward > 0
 
 
-# Create 5 different stages
-env_stages = []
-for i in range(num_envs):
-  # Each env has different ruleset
-  ruleset_key, rng = jax.random.split(ruleset_key)
-  rule = benchmark.sample_ruleset(rng)
-  env_params = env_params.replace(ruleset=rule)
 
-  environment_stage = EnvStage(
-    name=f"Environment {i + 1}",
-    web_env=jax_web_env,
-    action_keys=action_keys,
-    action_to_name=action_to_name,
-    env_params=env_params,
+def make_environment_stages(
+    name: str = 'small-1m',
+    rng: jax.random.PRNGKey = jax.random.key(42)):
+  # Create 5 different stages
+  env_stages = []
+
+  # create env + env_params. a bit redundant but OK
+  env, env_params = xminigrid.make("XLand-MiniGrid-R1-9x9")
+  jax_env = PlaygroundTimestepWrapper(env, autoreset=False, use_params=True)
+  jax_web_env = JaxWebEnv(
+    env=jax_env,
+    actions=actions,
     render_fn=render_fn,
-    vmap_render_fn=vmap_render_fn,
-    display_fn=env_stage_display_fn,
-    evaluate_success_fn=evaluate_success_fn,
-    min_success=MIN_SUCCESS_EPISODES,
-    max_episodes=MAX_STAGE_EPISODES,
-    verbosity=VERBOSITY,
-    msg_display_time=2,
-    metadata=dict(
-      desc=f"XLand environment {i + 1}",
-      stage_number=i + 1,
-    ),
   )
-  env_stages.append(environment_stage)
+  # NOTE: we need different compiled functions per setting, because the diffrent benchmarks use pytrees with different shapes
+  benchmark = xminigrid.load_benchmark(name=name)
+  rule = benchmark.sample_ruleset(rng)
+  env_params = env_params.replace(
+    ruleset=rule, # needed so that env compiles with right shapes
+    max_steps=200, view_size=11)
+  jax_web_env.precompile(dummy_env_params=env_params)
+  vmap_render_fn = jax_web_env.precompile_vmap_render_fn(render_fn, env_params)
+
+  for i in range(num_envs):
+    # Each env has different ruleset
+    rng, rng_ = jax.random.split(rng)
+    rule = benchmark.sample_ruleset(rng_)
+    env_params = env_params.replace(ruleset=rule)
+
+    environment_stage = EnvStage(
+      name=f"Environment {i + 1}",
+      web_env=jax_web_env,
+      action_keys=action_keys,
+      action_to_name=action_to_name,
+      env_params=env_params,
+      render_fn=render_fn,
+      vmap_render_fn=vmap_render_fn,
+      display_fn=env_stage_display_fn,
+      evaluate_success_fn=evaluate_success_fn,
+      min_success=MIN_SUCCESS_EPISODES,
+      max_episodes=MAX_STAGE_EPISODES,
+      verbosity=VERBOSITY,
+      msg_display_time=2,
+      metadata=dict(
+        desc=f"XLand environment {i + 1}",
+        stage_number=i + 1,
+      ),
+    )
+    env_stages.append(environment_stage)
+  return env_stages
 
 ########################################
 # Define Feedback Stage
@@ -300,8 +304,21 @@ feedback_stage = FeedbackStage(
 ########################################
 # Define Experiment
 ########################################
-all_stages = [instruction_stage, *env_stages, feedback_stage]
-experiment = nicewebrl.SimpleExperiment(
-  stages=all_stages,
-  randomize=[False] + [True] * (len(all_stages) - 1),
-)
+def make_experiment(name: str, rng: jax.random.PRNGKey):
+  env_stages = make_environment_stages(name=name, rng=rng)
+  all_stages = [instruction_stage, *env_stages, feedback_stage]
+  randomize = [False] + [True] * len(env_stages) + [False]
+  experiment = nicewebrl.Experiment(
+    blocks=all_stages,
+    randomize=randomize
+  )
+  return experiment
+
+experiment_set = nicewebrl.ExperimentSet(
+  experiments=dict(
+      small=make_experiment(name="small-1m", rng=jax.random.key(42)),
+      high=make_experiment(name="high-1m", rng=jax.random.key(43))
+  )
+) 
+
+#experiment_set.experiments['small'].get_block_order()

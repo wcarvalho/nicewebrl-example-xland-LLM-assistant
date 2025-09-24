@@ -15,7 +15,7 @@ import time
 import json
 from upload_google_data import save_to_gcs_with_retries, GOOGLE_CREDENTIALS
 
-from experiment_structure import experiment, describe_ruleset
+from experiment_structure import experiment_set, describe_ruleset
 import config
 
 
@@ -24,54 +24,54 @@ DATABASE_FILE = "db.sqlite"
 
 _user_locks = {}
 
+
 # DSPy configuration
 class GameAssistant(dspy.Signature):
-    """You are a helpful assistant for a Gridworld reinforcement learning game.
+  """You are a helpful assistant for a Gridworld reinforcement learning game.
 
-    These are the keys to control the agent:
-    ArrowUp: Move Forward
-    ArrowRight: Turn Right
-    ArrowLeft: Turn Left
-    p: Pick Up
-    d: Drop
-    t: Toggle
+  These are the keys to control the agent:
+  ArrowUp: Move Forward
+  ArrowRight: Turn Right
+  ArrowLeft: Turn Left
+  p: Pick Up
+  d: Drop
+  t: Toggle
 
-    The agent can pick up, drop, and toggle the doors.
-    Use the environment information to understand the user's position and goal.
-    Give short, specific hints to help them progress.
-    Keep responses to 1-2 lines."""
+  The agent can pick up, drop, and toggle the doors.
+  Use the environment information to understand the user's position and goal.
+  Give short, specific hints to help them progress.
+  Keep responses to 1-2 lines."""
 
-    env_text = dspy.InputField(desc="Current environment state")
-    question = dspy.InputField(desc="User's question")
-    answer = dspy.OutputField(desc="Short, specific hint to help the user progress")
+  env_text = dspy.InputField(desc="Current environment state")
+  question = dspy.InputField(desc="User's question")
+  answer = dspy.OutputField(desc="Short, specific hint to help the user progress")
+
 
 # Initialize DSPy models
 _dspy_models = {}
 
+
 def initialize_dspy_models():
-    """Initialize DSPy models for all three providers"""
-    global _dspy_models
+  """Initialize DSPy models for all three providers"""
+  global _dspy_models
 
-    # Use config settings
-    _dspy_models["gemini"] = dspy.LM(
-        model=config.GEMINI_MODEL,
-        api_key=config.GEMINI_API_KEY,
-        max_tokens=16000
-    )
+  # Use config settings
+  _dspy_models["gemini"] = dspy.LM(
+    model=config.GEMINI_MODEL, api_key=config.GEMINI_API_KEY, max_tokens=16000
+  )
 
-    _dspy_models["claude"] = dspy.LM(
-        model=f"anthropic/{config.CLAUDE_MODEL}",
-        api_key=config.CLAUDE_API_KEY,
-        max_tokens=16000
-    )
+  _dspy_models["claude"] = dspy.LM(
+    model=f"anthropic/{config.CLAUDE_MODEL}",
+    api_key=config.CLAUDE_API_KEY,
+    max_tokens=16000,
+  )
 
-    _dspy_models["chatgpt"] = dspy.LM(
-        model=f"openai/{config.CHATGPT_MODEL}",
-        api_key=config.CHATGPT_API_KEY,
-        temperature=1.0,
-        max_tokens=16000
-    )
-
+  _dspy_models["chatgpt"] = dspy.LM(
+    model=f"openai/{config.CHATGPT_MODEL}",
+    api_key=config.CHATGPT_API_KEY,
+    temperature=1.0,
+    max_tokens=16000,
+  )
 
 
 def get_object_name(object_type: int, object_color: int):
@@ -160,38 +160,38 @@ def convert_state_to_text(
 
 
 async def get_llm_response(message, env_text, model_name):
-    """Get response using DSPy for the specified model"""
-    logger.info(f"Getting LLM response from {model_name} for message: {message[:50]}...")
+  """Get response using DSPy for the specified model"""
+  logger.info(f"Getting LLM response from {model_name} for message: {message[:50]}...")
 
-    if model_name not in _dspy_models:
-        raise ValueError(f"Model {model_name} not initialized")
+  if model_name not in _dspy_models:
+    raise ValueError(f"Model {model_name} not initialized")
 
-    # Run the LLM call in a thread pool to avoid blocking
-    import concurrent.futures
-    import asyncio
+  # Run the LLM call in a thread pool to avoid blocking
+  import concurrent.futures
+  import asyncio
 
-    def sync_llm_call():
-        try:
-            logger.info(f"Starting sync LLM call for {model_name}")
-            with dspy.context(lm=_dspy_models[model_name]):
-                assistant = dspy.ChainOfThought(GameAssistant)
-                result = assistant(env_text=env_text, question=message)
-                logger.info(f"LLM response received: {result.answer[:100]}...")
-                return result.answer
-        except Exception as e:
-            logger.error(f"Error in sync_llm_call: {e}")
-            raise
-
-    # Execute the synchronous LLM call in a thread pool
+  def sync_llm_call():
     try:
-        loop = asyncio.get_event_loop()
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            response = await loop.run_in_executor(executor, sync_llm_call)
-        logger.info(f"Async LLM call completed successfully")
-        return response
+      logger.info(f"Starting sync LLM call for {model_name}")
+      with dspy.context(lm=_dspy_models[model_name]):
+        assistant = dspy.ChainOfThought(GameAssistant)
+        result = assistant(env_text=env_text, question=message)
+        logger.info(f"LLM response received: {result.answer[:100]}...")
+        return result.answer
     except Exception as e:
-        logger.error(f"Error in async LLM call: {e}")
-        raise
+      logger.error(f"Error in sync_llm_call: {e}")
+      raise
+
+  # Execute the synchronous LLM call in a thread pool
+  try:
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+      response = await loop.run_in_executor(executor, sync_llm_call)
+    logger.info(f"Async LLM call completed successfully")
+    return response
+  except Exception as e:
+    logger.error(f"Error in async LLM call: {e}")
+    raise
 
 
 async def send_message(chat_input, response_box):
@@ -205,6 +205,7 @@ async def send_message(chat_input, response_box):
   response_box.update()
 
   try:
+    experiment = experiment_set.get_experiment()
     current_stage = await experiment.get_stage()
     env_text = ""
     if isinstance(current_stage, stages.EnvStage):
@@ -242,6 +243,7 @@ def get_user_lock():
 
 async def global_handle_key_press(e, container):
   logger.info("global_handle_key_press")
+  experiment = experiment_set.get_experiment()
   if experiment.finished():
     logger.info("Experiment finished")
     return
@@ -334,8 +336,8 @@ async def collect_demographic_info(container):
       logger.info(f"age: {int(age)}, sex: {sex}")
       collected_demographic_info_event.set()
 
-    button = ui.button("Submit", on_click=submit)
-    await button.clicked()
+    ui.button("Submit", on_click=submit)
+    await collected_demographic_info_event.wait()
 
 
 async def start_experiment(meta_container, stage_container, llm_container):
@@ -378,11 +380,12 @@ async def start_experiment(meta_container, stage_container, llm_container):
   # ========================================
   logger.info("Starting experiment")
 
+  experiment = experiment_set.get_experiment()
   while not experiment.finished():
     stage = await experiment.get_stage()
     await run_stage(stage, stage_container)
     await stage.finish_saving_user_data()
-    await experiment.advance_stage()
+    await experiment.advance()
 
   await finish_experiment(meta_container)
 
@@ -556,11 +559,43 @@ async def check_if_over(container, episode_limit=60):
     pass
 
 
+@ui.page("/small")
+async def small_experiment(request: Request):
+  nicewebrl.initialize_user(request=request)
+  experiment_set.set_experiment("small")
+  experiment = experiment_set.get_experiment()
+  await experiment.initialize()
+  await run_experiment()
+
+
+@ui.page("/large")
+async def high_experiment(request: Request):
+  nicewebrl.initialize_user(request=request)
+  experiment_set.set_experiment("high")
+  experiment = experiment_set.get_experiment()
+  await experiment.initialize()
+  await run_experiment()
+
+
 @ui.page("/")
 async def index(request: Request):
-  nicewebrl.initialize_user(request=request)
-  await experiment.initialize()
+  with ui.column().style("align-items: center; margin-top: 50px;"):
+    ui.markdown("# XLand-LLM Assistant Experiment")
+    ui.markdown("Please select the experiment size:")
 
+    experiment_select = ui.select(
+      ['small', 'large'],
+      value='large',
+      label="Select Experiment",
+    )
+
+    def on_selection_change():
+      if experiment_select.value:
+        ui.navigate.to(f"/{experiment_select.value}")
+    start = ui.button("Start Experiment")
+    start.on_click(on_selection_change)
+
+async def run_experiment():
   model_list = ["gemini", "claude", "chatgpt"]
   # Initialize random model selection if not already set
   if "selected_model" not in app.storage.user:
@@ -608,6 +643,7 @@ async def index(request: Request):
 
 async def footer(footer_container):
   """Add user information and progress bar to the footer"""
+  experiment = experiment_set.get_experiment()
   with footer_container:
     with ui.row():
       ui.label().bind_text_from(app.storage.user, "user_id", lambda v: f"user id: {v}.")
