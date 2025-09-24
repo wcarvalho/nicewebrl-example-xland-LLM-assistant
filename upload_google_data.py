@@ -114,3 +114,9 @@ async def save_to_gcs_with_retries(
       else:
         logger.info(f"Failed to save to GCS after {max_retries} attempts: {e}")
         return False
+
+if __name__ == "__main__":
+  bucket_name = "xland-assistant"
+
+  bucket = initialize_storage_client(bucket_name)
+  list_files(bucket)

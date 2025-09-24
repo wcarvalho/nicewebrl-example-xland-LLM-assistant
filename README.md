@@ -40,6 +40,8 @@ flyctl deploy --config xland-assistant.toml
 
 # scale to multiple regions (useful for decreasing latency)
 flyctl scale count 10 --config xland-assistant.toml --region "iad,sea,lax,den"  --yes
+
+flyctl logs --config xland-assistant.toml
 ```
 
 

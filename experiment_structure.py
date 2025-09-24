@@ -14,10 +14,14 @@ from xminigrid.experimental.img_obs import RGBImgObservationWrapper
 from xminigrid.rendering.text_render import _text_encode_rule, _encode_tile
 from rendering import render
 
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 logger = get_logger(__name__)
 
 MAX_STAGE_EPISODES = 1
-MAX_EPISODE_TIMESTEPS = 10000
+MAX_EPISODE_TIMESTEPS = int(os.getenv("MAX_STEPS", 200))
 MIN_SUCCESS_EPISODES = 1
 VERBOSITY = 1
 
@@ -107,19 +111,6 @@ def describe_ruleset(ruleset) -> str:
       str += _encode_tile(tile) + "\n"
 
   return str
-
-
-def create_env(ruleset_key):
-  env, env_params = xminigrid.make("XLand-MiniGrid-R1-9x9")
-  benchmark = xminigrid.load_benchmark(name="small-1m")
-  rule = benchmark.sample_ruleset(ruleset_key)
-
-  env_params = env_params.replace(
-    ruleset=rule,
-    max_steps=200,
-    view_size=11,
-  )
-  return env, benchmark, env_params
 
 
 num_envs = 3
@@ -224,7 +215,7 @@ def make_environment_stages(
   rule = benchmark.sample_ruleset(rng)
   env_params = env_params.replace(
     ruleset=rule, # needed so that env compiles with right shapes
-    max_steps=200, view_size=11)
+    max_steps=MAX_EPISODE_TIMESTEPS, view_size=11)
   jax_web_env.precompile(dummy_env_params=env_params)
   vmap_render_fn = jax_web_env.precompile_vmap_render_fn(render_fn, env_params)
 
@@ -321,4 +312,3 @@ experiment_set = nicewebrl.ExperimentSet(
   )
 ) 
 
-#experiment_set.experiments['small'].get_block_order()

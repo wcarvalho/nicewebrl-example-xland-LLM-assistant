@@ -1,3 +1,6 @@
+from typing import Optional
+
+import os
 import os.path
 import asyncio
 from asyncio import Lock
@@ -5,8 +8,8 @@ from asyncio import Lock
 from nicegui import app, ui
 from fastapi import Request
 from tortoise import Tortoise
-import jax
 import jax.numpy as jnp
+
 import numpy as np
 import distrax
 import dspy
@@ -28,9 +31,9 @@ DATABASE_FILE = "db.sqlite"
 
 _user_locks = {}
 
+MODEL_IDX = int(os.getenv("MODEL", -1))
 model_list = ["gemini", "chatgpt"]
 model_counts = np.zeros(len(model_list), dtype=int)
-
 
 # DSPy configuration
 class GameAssistant(dspy.Signature):
@@ -64,7 +67,8 @@ def initialize_dspy_models():
 
   # Use config settings
   _dspy_models["gemini"] = dspy.LM(
-    model=config.GEMINI_MODEL, api_key=config.GEMINI_API_KEY, max_tokens=16000
+    model=f"gemini/{config.GEMINI_MODEL}",
+    api_key=config.GEMINI_API_KEY, max_tokens=16000
   )
 
   _dspy_models["claude"] = dspy.LM(
@@ -473,7 +477,7 @@ async def finish_experiment(container):
     ui.markdown(
       "### Please record the following code which you will need to provide for compensation"
     )
-    ui.markdown("### 'carvalho.assistants 3'")
+    ui.markdown("### 'xland.llm 4'")
     ui.markdown("#### You may close the browser")
 
 
@@ -607,10 +611,13 @@ async def run_experiment():
   # Initialize random model selection if not already set
   if "selected_model" not in app.storage.user:
     rng = nicewebrl.new_rng()
-    mask = model_counts == model_counts.min()
-    # Uniform over minima via logits=0 for minima, -inf otherwise.
-    logits = jnp.where(mask, 0.0, -jnp.inf)
-    idx = distrax.Categorical(logits=logits).sample(seed=rng)
+    if MODEL_IDX < 0:
+      mask = model_counts == model_counts.min()
+      # Uniform over minima via logits=0 for minima, -inf otherwise.
+      logits = jnp.where(mask, 0.0, -jnp.inf)
+      idx = distrax.Categorical(logits=logits).sample(seed=rng)
+    else:
+      idx = MODEL_IDX
     model_counts[int(idx)] += 1
     app.storage.user["selected_model"] = model_list[int(idx)]
 

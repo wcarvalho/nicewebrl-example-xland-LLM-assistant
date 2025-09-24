@@ -2593,7 +2593,7 @@ wheels = [
 [[package]]
 name = "nicewebrl"
 version = "0.0.3"
-source = { git = "https://github.com/KempnerInstitute/nicewebrl.git#1c8c94e7b338b0748c6678d9d5725cfcecdccb09" }
+source = { git = "https://github.com/KempnerInstitute/nicewebrl.git#5fd63e7a785afc888580d6232b5a61265a080b7b" }
 dependencies = [
     { name = "distrax", version = "0.1.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or python_full_version >= '3.13'" },
     { name = "distrax", version = "0.1.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' and python_full_version < '3.13'" },

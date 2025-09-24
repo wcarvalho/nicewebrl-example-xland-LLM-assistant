@@ -1,6 +1,7 @@
 FROM python:3.10-slim
 
-RUN apt update && apt install -y curl procps git
+RUN apt update && apt install -y curl procps git build-essential
+
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
@@ -16,6 +17,7 @@ COPY ./google-cloud-key.json /app/
 COPY . /app
 
 # Install dependencies with uv
+RUN rm -rf .venv __pycache__ *.pyc
 RUN uv sync --frozen
 
 ENV PYTHONUNBUFFERED=1
