@@ -511,20 +511,20 @@ async def save_data(feedback=None, **kwargs):
     bucket_name=config.BUCKET_NAME,
   )
 
-  # Try to delete local files after successful upload
-  from nicewebrl.stages import StageStateModel
+  ## Try to delete local files after successful upload
+  #from nicewebrl.stages import StageStateModel
 
-  logger.info(f"Deleting data for user {app.storage.browser['id']}")
-  await StageStateModel.filter(session_id=app.storage.browser["id"]).delete()
-  logger.info(
-    f"Successfully deleted stage inforation for user {app.storage.browser['id']}"
-  )
-  for local_file in files_to_save:
-    try:
-      os.remove(local_file)
-      logger.info(f"Successfully deleted local file: {local_file}")
-    except Exception as e:
-      logger.warning(f"Failed to delete local file {local_file}: {str(e)}")
+  #logger.info(f"Deleting data for user {app.storage.browser['id']}")
+  #await StageStateModel.filter(session_id=app.storage.browser["id"]).delete()
+  #logger.info(
+  #  f"Successfully deleted stage inforation for user {app.storage.browser['id']}"
+  #)
+  #for local_file in files_to_save:
+  #  try:
+  #    os.remove(local_file)
+  #    logger.info(f"Successfully deleted local file: {local_file}")
+  #  except Exception as e:
+  #    logger.warning(f"Failed to delete local file {local_file}: {str(e)}")
 
 
 async def run_stage(stage, container):

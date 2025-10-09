@@ -1,0 +1,3 @@
+# Allow config.py for Docker builds
+!config.py
+!cache

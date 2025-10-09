@@ -12,6 +12,8 @@ dependencies = [
     "certifi>=2025.8.3",
     "ipdb>=0.13.13",
     "nicegui>=2.24.2",
+    "jupyter>=1.1.1",
+    "pandas>=2.3.2",
 ]
 
 [project.optional-dependencies]
